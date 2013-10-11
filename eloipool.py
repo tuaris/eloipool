@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/local/bin/python3
 # Eloipool - Python Bitcoin pool server
 # Copyright (C) 2011-2013  Luke Dashjr <luke-jr+eloipool@utopios.org>
 # Portions written by Peter Leurs <kinlo@triplemining.com>
