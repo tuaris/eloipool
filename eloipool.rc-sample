@@ -1,0 +1,31 @@
+#!/bin/sh
+
+# $FreeBSD$
+#
+# PROVIDE: eloipool
+# REQUIRE: LOGIN bitcoin
+# KEYWORD: shutdown
+#
+# Add the following lines to /etc/rc.conf.local or /etc/rc.conf
+# to enable this service:
+#
+# eloipool_enable (bool):	Set to NO by default.
+#				Set it to YES to enable eloipool.
+# eloipool_config (path):	Set to /usr/local/etc/eloipool.conf
+#				by default.
+
+. /etc/rc.subr
+
+name=eloipool
+rcvar=`set_rcvar`
+
+load_rc_config $name
+
+: ${eloipool_enable:="NO"}
+: ${eloipool_config="/usr/local/etc/eloipool.conf"}
+
+command=/usr/local/eloipool/eloipool.py
+command_interpreter="/usr/local/bin/python3"
+command_args="> /dev/null 2>&1 &"
+
+run_rc_command "$1"
