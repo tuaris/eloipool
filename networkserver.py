@@ -24,8 +24,8 @@ from time import time
 import traceback
 from util import ScheduleDict, WithNoop, tryErr
 
-EPOLL_READ = select.EPOLLIN | select.EPOLLPRI | select.EPOLLERR | select.EPOLLHUP
-EPOLL_WRITE = select.EPOLLOUT
+EPOLL_READ = select.POLLIN | select.POLLPRI | select.POLLERR | select.POLLHUP
+EPOLL_WRITE = select.POLLOUT
 
 class SocketHandler:
 	ac_in_buffer_size = 4096
@@ -236,7 +236,7 @@ class SocketHandler:
 class NetworkListener:
 	logger = logging.getLogger('SocketListener')
 	
-	def __init__(self, server, server_address, address_family = socket.AF_INET6):
+	def __init__(self, server, server_address, address_family = socket.AF_INET):
 		self.server = server
 		self.server_address = server_address
 		self.address_family = address_family
@@ -253,7 +253,7 @@ class NetworkListener:
 		return sock
 	
 	def _makebind_su(self, server_address):
-		if self.address_family != socket.AF_INET6:
+		if self.address_family != socket.AF_INET:
 			raise NotImplementedError
 		
 		from bindservice import bindservice
@@ -261,7 +261,7 @@ class NetworkListener:
 		if not node: node = ''
 		if not service: service = ''
 		fd = bindservice(str(node), str(service))
-		sock = socket.fromfd(fd, socket.AF_INET6, socket.SOCK_STREAM)
+		sock = socket.fromfd(fd, socket.AF_INET, socket.SOCK_STREAM)
 		sock.setblocking(0)
 		return sock
 	
@@ -323,7 +323,7 @@ class AsyncSocketServer:
 		self.rejecting = False
 		self.lastidle = 0
 		
-		self._epoll = select.epoll()
+		self._poll = select.poll()
 		self._fd = {}
 		self.connections = {}
 		
@@ -343,19 +343,19 @@ class AsyncSocketServer:
 			self.waker = w
 	
 	def register_socket(self, fd, o, eventmask = EPOLL_READ):
-		self._epoll.register(fd, eventmask)
+		self._poll.register(fd, eventmask)
 		self._fd[fd] = o
 	
 	def register_socket_m(self, fd, eventmask):
 		try:
-			self._epoll.modify(fd, eventmask)
+			self._poll.modify(fd, eventmask)
 		except IOError:
 			raise socket.error
 	
 	def unregister_socket(self, fd):
 		del self._fd[fd]
 		try:
-			self._epoll.unregister(fd)
+			self._poll.unregister(fd)
 		except IOError:
 			raise socket.error
 	
@@ -379,7 +379,7 @@ class AsyncSocketServer:
 	def wakeup(self):
 		if not self.waker:
 			raise NotImplementedError('Class `%s\' did not enable waker' % (self.__class__.__name__))
-		os.write(self.waker, b'\1')  # to break out of the epoll
+		os.write(self.waker, b'\1')  # to break out of the poll
 	
 	def final_init(self):
 		pass
@@ -429,7 +429,7 @@ class AsyncSocketServer:
 			
 			self.doing = 'poll'
 			try:
-				events = self._epoll.poll(timeout=timeout)
+				events = self._poll.poll()
 			except (IOError, select.error):
 				continue
 			except:
