@@ -26,9 +26,7 @@ class _getblocktemplate:
 	def final_init(server):
 		ShareTargetHex = '%064x' % (server.ShareTarget,)
 		JSONRPCHandler.getblocktemplate_rv_template['target'] = ShareTargetHex
-		if hasattr(server, 'XStratumHeader'):
-			JSONRPCHandler.XStratumHeader = server.XStratumHeader	
-
+	
 	getblocktemplate_rv_template = {
 		'longpoll': '/LP',
 		'mutable': [
@@ -58,9 +56,6 @@ class _getblocktemplate:
 		except:
 			pass
 		
-		if hasattr(self, 'XStratumHeader') and 'brokenstratum' not in self.quirks:
-			self._JSONHeaders['X-Stratum'] = self.XStratumHeader
-
 		rv = dict(self.getblocktemplate_rv_template)
 		p_magic = [False]
 		(MC, wld, target) = self.server.getBlockTemplate(self.Username, p_magic=p_magic, RequestedTarget=RequestedTarget)
@@ -103,8 +98,6 @@ class _getblocktemplate:
 			'userAgent': self.UA,
 			'submitProtocol': 'GBT',
 		}
-		if hasattr(self, 'XStratumHeader') and 'brokenstratum' not in self.quirks:
-			self._JSONHeaders['X-Stratum'] = self.XStratumHeader
 		try:
 			self.server.receiveShare(share)
 		except RejectedShare as rej:

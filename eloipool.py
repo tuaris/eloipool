@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/bin/python3
 # Eloipool - Python Bitcoin pool server
 # Copyright (C) 2011-2013  Luke Dashjr <luke-jr+eloipool@utopios.org>
 # Portions written by Peter Leurs <kinlo@triplemining.com>
@@ -221,14 +221,16 @@ def submitGotwork(info):
 	except:
 		checkShare.logger.warning('Failed to submit gotwork\n' + traceback.format_exc())
 
+if not hasattr(config, 'GotWorkTarget'):
+	config.GotWorkTarget = 0
+
 def clampTarget(target, DTMode):
 	# ShareTarget is the minimum
 	if target is None or target > config.ShareTarget:
 		target = config.ShareTarget
 	
-	# Never target above the network, as we'd lose blocks
-	if target < networkTarget:
-		target = networkTarget
+	# Never target above upstream(s), as we'd lose blocks
+	target = max(target, networkTarget, config.GotWorkTarget)
 	
 	if DTMode == 2:
 		# Ceil target to a power of two :)
@@ -473,6 +475,7 @@ def checkShare(share):
 	shareTime = share['time'] = time()
 	
 	username = share['username']
+	isstratum = False
 	if 'data' in share:
 		# getwork/GBT
 		checkData(share)
@@ -501,12 +504,16 @@ def checkShare(share):
 			coinbase = None
 	else:
 		# Stratum
-		MWL = workLog[None]
+		isstratum = True
 		wli = share['jobid']
 		buildStratumData(share, b'\0' * 32)
 		mode = 'MC'
 		moden = 1
 		othertxndata = b''
+		if None not in workLog:
+			# We haven't yet sent any stratum work for this block
+			raise RejectedShare('unknown-work')
+		MWL = workLog[None]
 	
 	if wli not in MWL:
 		raise RejectedShare('unknown-work')
@@ -610,15 +617,6 @@ def checkShare(share):
 	if shareTimestamp > shareTime + 7200:
 		raise RejectedShare('time-too-new')
 	
-	if config.DynamicTargetting and username in userStatus:
-		# NOTE: userStatus[username] only doesn't exist across restarts
-		status = userStatus[username]
-		target = status[0] or config.ShareTarget
-		if target == workTarget:
-			userStatus[username][2] += 1
-		else:
-			userStatus[username][2] += float(target) / workTarget
-	
 	if moden:
 		cbpre = workCoinbase
 		cbpreLen = len(cbpre)
@@ -640,6 +638,17 @@ def checkShare(share):
 			allowed = assembleBlock(data, txlist)[80:]
 			if allowed != share['blkdata']:
 				raise RejectedShare('bad-txns')
+	
+	if config.DynamicTargetting and username in userStatus:
+		# NOTE: userStatus[username] only doesn't exist across restarts
+		status = userStatus[username]
+		target = status[0] or config.ShareTarget
+		if target == workTarget:
+			userStatus[username][2] += 1
+		else:
+			userStatus[username][2] += float(target) / workTarget
+		if isstratum and userStatus[username][2] > config.DynamicTargetGoal * 2:
+			stratumsrv.quickDifficultyUpdate(username)
 checkShare.logger = logging.getLogger('checkShare')
 
 def logShare(share):
@@ -902,11 +911,7 @@ if __name__ == "__main__":
 	if hasattr(config, 'UpstreamBitcoindNode') and config.UpstreamBitcoindNode:
 		BitcoinLink(bcnode, dest=config.UpstreamBitcoindNode)
 	
-	# Make GBT optional
-	if hasattr(config, 'GBTMining'):
-		if config.GBTMining == True:
-			import jsonrpc_getblocktemplate
-
+	import jsonrpc_getblocktemplate
 	import jsonrpc_getwork
 	import jsonrpc_setworkaux
 	
@@ -923,8 +928,6 @@ if __name__ == "__main__":
 		LS.append(JSONRPCListener(server, a))
 	if hasattr(config, 'SecretUser'):
 		server.SecretUser = config.SecretUser
-	if hasattr(config, 'XStratumHeader'):
-		server.XStratumHeader = config.XStratumHeader
 	server.aux = MM.CoinbaseAux
 	server.getBlockHeader = getBlockHeader
 	server.getBlockTemplate = getBlockTemplate
@@ -941,6 +944,7 @@ if __name__ == "__main__":
 	stratumsrv.getStratumJob = getStratumJob
 	stratumsrv.getExistingStratumJob = getExistingStratumJob
 	stratumsrv.receiveShare = receiveShare
+	stratumsrv.RaiseRedFlags = RaiseRedFlags
 	stratumsrv.getTarget = getTarget
 	stratumsrv.defaultTarget = config.ShareTarget
 	stratumsrv.IsJobValid = IsJobValid

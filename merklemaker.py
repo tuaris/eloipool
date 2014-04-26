@@ -81,6 +81,7 @@ class merkleMaker(threading.Thread):
 		self.MinimumTemplateScore = 1
 		self.currentBlock = (None, None, None)
 		self.lastBlock = (None, None, None)
+		self.SubsidyAlgo = lambda height: 5000000000 >> (height // 210000)
 	
 	def _prepare(self):
 		self.TemplateSources = list(getattr(self, 'TemplateSources', ()))
@@ -157,7 +158,7 @@ class merkleMaker(threading.Thread):
 		self.nextMerkleUpdate = 0
 	
 	def createClearMerkleTree(self, height):
-		subsidy = 5000000000 >> (height // 210000)
+		subsidy = self.SubsidyAlgo(height)
 		cbtxn = self.makeCoinbaseTxn(subsidy, False)
 		cbtxn.assemble()
 		return MerkleTree([cbtxn])
@@ -519,8 +520,9 @@ class merkleMaker(threading.Thread):
 					# NOTE: If you're going to try to remove this preference for the highest block, you need to (at least) stop _ProcessGBT from calling updateBlock whenever it sees a new high
 					AcceptRatio += newMerkleTree.MP['height']
 					
+					self.logger.debug('Template from \'%s\' has %s acceptance ratio at height %s' % (TS['name'], AcceptRatio, newMerkleTree.MP['height']))
 					if Best[0] < AcceptRatio:
-						Best = r
+						Best = (AcceptRatio, newMerkleTree)
 						if AcceptRatio == 1:
 							break
 				except:
